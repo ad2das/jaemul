@@ -1637,9 +1637,11 @@
         }
 
         // Web Share API Check
-        if (navigator.canShare && navigator.canShare({ files: [new File([''], 'test.csv', { type: 'text/csv' })] })) {
+        // Chrome/Samsung Internet only allow an exact 'text/csv' MIME type for shared files
+        // ('text/csv;charset=utf-8' is rejected → share fails). The BOM already marks it as UTF-8.
+        const file = new File([csvContent], fileName, { type: 'text/csv' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
-            const file = new File([csvContent], fileName, { type: 'text/csv;charset=utf-8' });
             await navigator.share({
               files: [file],
               title: subject,
@@ -1653,10 +1655,11 @@
           }
         }
 
-        // Mailto fallback
+        // Mailto fallback: mailto can't carry attachments, so save the CSV first for manual attaching
+        exportToCsvFile();
+        showToast('파일 공유가 안 되는 환경이라 CSV를 저장했습니다. 메일에 직접 첨부해주세요.', 'warning');
         const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(summaryBody)}`;
-        window.location.href = mailtoUrl;
-        showToast('공유 앱으로 이동합니다.', 'info');
+        setTimeout(() => { window.location.href = mailtoUrl; }, 800);
       }
 
       // -------------------------------------------------------------
