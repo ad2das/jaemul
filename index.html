@@ -598,7 +598,8 @@
       // Application State
       let scanRecords = [];
       let settings = {
-        dupMode: 'increment', // 'increment' | 'ignore' | 'always'
+        dupMode: 'ignore', // 'increment' | 'ignore' | 'always'
+        dupModeDefaultV2: true, // marks settings saved after 중복 무시 became the default
         audioEnabled: true,
         vibrationEnabled: true,
         autoOpenDetail: true, // open the quantity popup right after each scan
@@ -775,7 +776,14 @@
           }
           const rawConfig = localStorage.getItem(STORAGE_KEY_CONFIG);
           if (rawConfig) {
-            settings = Object.assign(settings, JSON.parse(rawConfig));
+            const storedConfig = JSON.parse(rawConfig);
+            settings = Object.assign(settings, storedConfig);
+            // One-time switch to the new default (중복 무시) for phones that saved settings before it changed
+            if (!storedConfig.dupModeDefaultV2) {
+              settings.dupMode = 'ignore';
+              settings.dupModeDefaultV2 = true;
+              localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(settings));
+            }
           }
         } catch (e) {
           // Fallback to empty records if corrupted
@@ -916,11 +924,13 @@
             triggerVisualFlash();
             showToast(`수량 증가 (+1): ${code} (총 ${updatedItem.quantity}개)`, 'info');
           } else if (settings.dupMode === 'ignore') {
+            // Counts stay as they are; reopen the quantity popup so they can be checked/fixed
             playBeepSound('duplicate');
             triggerVibration([40, 40]);
-            showToast(`중복 바코드 무시됨: ${code}`, 'warning');
+            showToast(`이미 등록된 번호: ${code} (수량 변경 없음)`, 'warning');
             activeRecord = scanRecords[existingIndex];
             updateLiveItemCard(activeRecord);
+            if (settings.autoOpenDetail !== false) openQtyModal(activeRecord);
             return;
           } else {
             // 'always' -> create brand new row
@@ -1168,8 +1178,8 @@
               // scanner already stopped
             }
           }
-          // The camera is probably still on the same label: hold off re-reading it for an extra moment
-          lastScannedTime = Date.now() + 1500;
+          // The camera is probably still on the same label: hold off re-reading it (~5s) so the popup doesn't reopen
+          lastScannedTime = Date.now() + 3500;
         }
       }
 
@@ -1998,9 +2008,9 @@
         if (settings.dupMode === 'increment') {
           dupModeDescription.textContent = '동일한 바코드를 다시 스캔하면 기존 항목의 수량이 1 증가합니다.';
         } else if (settings.dupMode === 'ignore') {
-          dupModeDescription.textContent = '동일한 바코드는 목록에 추가되지 않고 경고음과 함께 무시됩니다.';
+          dupModeDescription.textContent = '이미 등록된 바코드를 다시 스캔하면 수량은 그대로 두고, 경고음과 함께 그 항목의 수량 입력창을 엽니다.';
         } else {
-          dupModeDescription.textContent = '동일한 바코드라도 스캔할 때마다 새로운 행으로 계속 추가됩니다.';
+          dupModeDescription.textContent = '동일한 바코드라도 스캔할 때마다 새로운 행으로 추가됩니다. (CSV에도 같은 자산번호가 여러 줄로 들어갑니다)';
         }
       }
 
