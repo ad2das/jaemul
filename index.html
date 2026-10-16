@@ -2037,6 +2037,61 @@
     })();
   </script>
 
+  <!-- In-app browser guard (KakaoTalk, NAVER, Band, Instagram...): camera/share are unreliable there and
+       records would be stored separately from the user's real browser, so send them to Chrome/Safari -->
+  <script>
+    (function () {
+      if (window.AndroidBridge) return;
+      var ua = navigator.userAgent || '';
+      if (!/KAKAOTALK|NAVER\(inapp|; ?wv\)|Instagram|FBAN|FBAV|FB_IAB|Line\/|BAND\/|DaumApps|everytimeApp/i.test(ua)) return;
+
+      var url = location.origin + location.pathname;
+      var isAndroid = /Android/i.test(ua);
+
+      // KakaoTalk can hand the page over to the system browser by itself
+      if (/KAKAOTALK/i.test(ua)) {
+        location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url);
+      }
+
+      var intentUrl = function (pkg) {
+        return 'intent://' + location.host + location.pathname + '#Intent;scheme=https;package=' + pkg + ';end';
+      };
+      var bar = document.createElement('div');
+      bar.className = 'sticky top-0 z-[60] bg-amber-400 text-slate-950 px-3 py-2.5 text-xs font-medium shadow-lg flex flex-col gap-2';
+      bar.innerHTML =
+        '<p>앱(카카오톡·네이버 등) 안에서 열렸습니다. 카메라·공유가 안 되거나 기록이 따로 저장될 수 있으니 <b>' +
+        (isAndroid ? '삼성 인터넷 또는 Chrome' : 'Safari') + '</b>에서 열어주세요.</p>' +
+        '<div class="flex flex-wrap items-center gap-2">' +
+        (isAndroid
+          ? '<a class="px-3 py-1.5 rounded-lg bg-slate-950 text-white font-semibold" href="' + intentUrl('com.sec.android.app.sbrowser') + '">삼성 인터넷으로 열기</a>' +
+            '<a class="px-3 py-1.5 rounded-lg bg-slate-950 text-white font-semibold" href="' + intentUrl('com.android.chrome') + '">Chrome으로 열기</a>'
+          : '<span>화면의 공유(또는 ⋯) 메뉴 → <b>Safari로 열기</b></span>') +
+        '<button type="button" class="px-3 py-1.5 rounded-lg bg-slate-950/15 font-semibold">주소 복사</button>' +
+        '</div>';
+      document.body.insertBefore(bar, document.body.firstChild);
+
+      var copyBtn = bar.querySelector('button');
+      copyBtn.addEventListener('click', function () {
+        var done = function () { copyBtn.textContent = '복사됨 — 브라우저 주소창에 붙여넣기'; };
+        var fallback = function () {
+          var t = document.createElement('textarea');
+          t.value = url;
+          document.body.appendChild(t);
+          t.select();
+          var ok = false;
+          try { ok = document.execCommand('copy'); } catch (e) {}
+          document.body.removeChild(t);
+          if (ok) done(); else window.prompt('아래 주소를 복사해 Chrome/Safari에 붙여넣으세요', url);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done, fallback);
+        } else {
+          fallback();
+        }
+      });
+    })();
+  </script>
+
   <!-- PWA Service Worker registration (skipped inside the Android WebView) -->
   <script>
     if ('serviceWorker' in navigator && !window.AndroidBridge) {
