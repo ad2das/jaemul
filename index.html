@@ -498,7 +498,10 @@
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-[11px] font-medium text-slate-300 mb-1">조사 수량</label>
-              <input type="number" id="detailQtyInput" value="1" min="1" max="9999" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500">
+              <button type="button" id="detailQtyBtn" class="w-full flex items-center justify-between gap-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 hover:border-cyan-500 text-left">
+                <span id="detailQtyVal" class="truncate">1개</span>
+                <span class="text-cyan-400 shrink-0">편집</span>
+              </button>
             </div>
             <div>
               <label class="block text-[11px] font-medium text-slate-300 mb-1">스캔 일시</label>
@@ -522,21 +525,46 @@
     </div>
   </div>
 
-  <!-- Quick Quantity Modal (opens right after a scan; only 수량 goes into the ZFIAL0170 CSV) -->
+  <!-- Quick Quantity Modal (opens right after a scan): 신품/중고품/요정품 = 활용자산, 비활용 = 비활용자산 -->
   <div id="qtyModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <form id="qtyForm" class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xs w-full p-5 shadow-2xl flex flex-col gap-4">
+    <form id="qtyForm" class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl flex flex-col gap-3">
       <div class="flex items-center justify-between gap-2">
         <span id="qtyCodeVal" class="text-lg font-mono font-bold text-cyan-300 tracking-wider truncate"></span>
         <span id="qtyCategoryBadge" class="px-2 py-0.5 rounded text-[11px] font-semibold shrink-0"></span>
       </div>
-      <div>
-        <label for="qtyInput" class="block text-[11px] font-medium text-slate-300 mb-1.5">조사 수량</label>
+
+      <div class="flex flex-col gap-2">
+        <p class="text-[11px] font-semibold text-emerald-400">활용자산</p>
         <div class="flex items-center gap-2">
-          <button type="button" id="btnQtyMinus" class="w-12 h-12 shrink-0 rounded-xl bg-slate-800 text-white text-2xl font-bold active:bg-slate-700">−</button>
-          <input type="number" id="qtyInput" inputmode="numeric" min="1" max="9999" class="flex-1 min-w-0 h-12 bg-slate-950 border border-slate-800 rounded-xl text-center text-xl font-bold text-white outline-none focus:border-cyan-500">
-          <button type="button" id="btnQtyPlus" class="w-12 h-12 shrink-0 rounded-xl bg-slate-800 text-white text-2xl font-bold active:bg-slate-700">+</button>
+          <span class="w-14 shrink-0 text-sm text-slate-200">신품</span>
+          <button type="button" data-cat="new" data-step="-1" class="qty-step w-10 h-10 shrink-0 rounded-xl bg-slate-800 text-white text-xl font-bold active:bg-slate-700">−</button>
+          <input type="number" data-cat="new" inputmode="numeric" min="0" max="9999" class="qty-cat flex-1 min-w-0 h-10 bg-slate-950 border border-slate-800 rounded-xl text-center text-lg font-bold text-white outline-none focus:border-cyan-500">
+          <button type="button" data-cat="new" data-step="1" class="qty-step w-10 h-10 shrink-0 rounded-xl bg-slate-800 text-white text-xl font-bold active:bg-slate-700">+</button>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-14 shrink-0 text-sm text-slate-200">중고품</span>
+          <button type="button" data-cat="used" data-step="-1" class="qty-step w-10 h-10 shrink-0 rounded-xl bg-slate-800 text-white text-xl font-bold active:bg-slate-700">−</button>
+          <input type="number" data-cat="used" inputmode="numeric" min="0" max="9999" class="qty-cat flex-1 min-w-0 h-10 bg-slate-950 border border-slate-800 rounded-xl text-center text-lg font-bold text-white outline-none focus:border-cyan-500">
+          <button type="button" data-cat="used" data-step="1" class="qty-step w-10 h-10 shrink-0 rounded-xl bg-slate-800 text-white text-xl font-bold active:bg-slate-700">+</button>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-14 shrink-0 text-sm text-slate-200">요정품</span>
+          <button type="button" data-cat="repair" data-step="-1" class="qty-step w-10 h-10 shrink-0 rounded-xl bg-slate-800 text-white text-xl font-bold active:bg-slate-700">−</button>
+          <input type="number" data-cat="repair" inputmode="numeric" min="0" max="9999" class="qty-cat flex-1 min-w-0 h-10 bg-slate-950 border border-slate-800 rounded-xl text-center text-lg font-bold text-white outline-none focus:border-cyan-500">
+          <button type="button" data-cat="repair" data-step="1" class="qty-step w-10 h-10 shrink-0 rounded-xl bg-slate-800 text-white text-xl font-bold active:bg-slate-700">+</button>
+        </div>
+
+        <p class="text-[11px] font-semibold text-amber-400 pt-1">비활용자산</p>
+        <div class="flex items-center gap-2">
+          <span class="w-14 shrink-0 text-sm text-slate-200">비활용</span>
+          <button type="button" data-cat="unused" data-step="-1" class="qty-step w-10 h-10 shrink-0 rounded-xl bg-slate-800 text-white text-xl font-bold active:bg-slate-700">−</button>
+          <input type="number" data-cat="unused" inputmode="numeric" min="0" max="9999" class="qty-cat flex-1 min-w-0 h-10 bg-slate-950 border border-slate-800 rounded-xl text-center text-lg font-bold text-white outline-none focus:border-cyan-500">
+          <button type="button" data-cat="unused" data-step="1" class="qty-step w-10 h-10 shrink-0 rounded-xl bg-slate-800 text-white text-xl font-bold active:bg-slate-700">+</button>
         </div>
       </div>
+
+      <div id="qtySummary" class="text-xs text-slate-300 bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2 text-center"></div>
+
       <div class="grid grid-cols-2 gap-2">
         <button type="button" id="btnQtyClose" class="py-2.5 rounded-xl bg-slate-800 text-slate-300 text-sm font-medium hover:bg-slate-700">닫기</button>
         <button type="submit" class="py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold shadow-lg shadow-cyan-600/20">확인</button>
@@ -694,7 +722,7 @@
       const detailSpecVal = document.getElementById('detailSpecVal');
       const detailNameInput = document.getElementById('detailNameInput');
       const detailMemoInput = document.getElementById('detailMemoInput');
-      const detailQtyInput = document.getElementById('detailQtyInput');
+      const detailQtyVal = document.getElementById('detailQtyVal');
       const detailTimeVal = document.getElementById('detailTimeVal');
       const btnCopyBarcode = document.getElementById('btnCopyBarcode');
       const btnDeleteFromDetail = document.getElementById('btnDeleteFromDetail');
@@ -956,15 +984,6 @@
         updateLiveItemCard(activeRecord);
 
         if (settings.autoOpenDetail !== false && activeRecord) {
-          // Freeze scanning while the quantity popup is open; resumed in closeQtyModal
-          if (isScanning && html5QrCode && !scannerPausedForDetail) {
-            try {
-              html5QrCode.pause(true);
-              scannerPausedForDetail = true;
-            } catch (_) {
-              // keep scanning if pause isn't possible
-            }
-          }
           openQtyModal(activeRecord);
         }
       }
@@ -1094,7 +1113,8 @@
 
         detailNameInput.value = record.name || '';
         detailMemoInput.value = record.memo || '';
-        detailQtyInput.value = record.quantity || 1;
+        const counts = getCounts(record);
+        detailQtyVal.textContent = `${record.quantity || 1}개 (활용 ${counts.new + counts.used + counts.repair} / 비활용 ${counts.unused})`;
         detailTimeVal.textContent = formatDateTime(record.timestamp);
 
         detailModal.classList.remove('hidden');
@@ -1123,7 +1143,6 @@
 
         target.name = detailNameInput.value.trim();
         target.memo = detailMemoInput.value.trim();
-        target.quantity = Math.max(1, parseInt(detailQtyInput.value, 10) || 1);
         target.updatedAt = new Date().toISOString();
 
         saveData();
@@ -1132,6 +1151,17 @@
         updateLiveItemCard(target);
         closeDetailModal();
         showToast('자산 상세 정보가 저장되었습니다.', 'success');
+      });
+
+      // 수량 분류 편집: keep what was typed in 자산명/위치, then switch to the quantity popup
+      document.getElementById('detailQtyBtn').addEventListener('click', () => {
+        const target = scanRecords.find(r => r.id === detailRecordId.value);
+        if (!target) return;
+        target.name = detailNameInput.value.trim();
+        target.memo = detailMemoInput.value.trim();
+        saveData();
+        closeDetailModal();
+        openQtyModal(target);
       });
 
       btnDeleteFromDetail.addEventListener('click', () => {
@@ -1143,24 +1173,71 @@
         }
       });
 
+      // -------------------------------------------------------------
+      // 수량 분류: 신품/중고품/요정품 = 활용자산, 비활용 = 비활용자산, 합계 = 실사수량(record.quantity)
+      // -------------------------------------------------------------
+      const QTY_CATS = ['new', 'used', 'repair', 'unused'];
+
+      // Counts that always add up to record.quantity. Records from before the split (or whose quantity was
+      // changed by a scan / list −+ button) put the difference into 신품; decreases come off 신품 first.
+      function getCounts(record) {
+        const total = Math.max(1, parseInt(record.quantity, 10) || 1);
+        const c = { new: 0, used: 0, repair: 0, unused: 0 };
+        if (record.counts) {
+          QTY_CATS.forEach(k => { c[k] = Math.max(0, parseInt(record.counts[k], 10) || 0); });
+        }
+        let diff = total - QTY_CATS.reduce((sum, k) => sum + c[k], 0);
+        if (diff > 0) c.new += diff;
+        for (const k of QTY_CATS) {
+          if (diff >= 0) break;
+          const take = Math.min(c[k], -diff);
+          c[k] -= take;
+          diff += take;
+        }
+        return c;
+      }
+
       // Quick quantity popup shown right after a scan (scanner is paused while it's open)
       const qtyModal = document.getElementById('qtyModal');
       const qtyForm = document.getElementById('qtyForm');
-      const qtyInput = document.getElementById('qtyInput');
       const qtyCodeVal = document.getElementById('qtyCodeVal');
       const qtyCategoryBadge = document.getElementById('qtyCategoryBadge');
+      const qtySummary = document.getElementById('qtySummary');
+      const qtyCatInputs = {};
+      qtyModal.querySelectorAll('.qty-cat').forEach(el => { qtyCatInputs[el.dataset.cat] = el; });
       let qtyRecordId = null;
 
+      function readQtyCats() {
+        const c = {};
+        QTY_CATS.forEach(k => { c[k] = Math.min(9999, Math.max(0, parseInt(qtyCatInputs[k].value, 10) || 0)); });
+        return c;
+      }
+
+      function updateQtySummary() {
+        const c = readQtyCats();
+        const active = c.new + c.used + c.repair;
+        qtySummary.textContent = `활용 ${active} · 비활용 ${c.unused} · 실사수량 ${active + c.unused}`;
+      }
+
       function openQtyModal(record) {
+        // Freeze scanning while the popup is open; resumed in closeQtyModal
+        if (isScanning && html5QrCode && !scannerPausedForDetail) {
+          try {
+            html5QrCode.pause(true);
+            scannerPausedForDetail = true;
+          } catch (_) {
+            // keep scanning if pause isn't possible
+          }
+        }
         const info = inspectBarcode(record.code);
+        const c = getCounts(record);
         qtyRecordId = record.id;
         qtyCodeVal.textContent = record.code;
         qtyCategoryBadge.textContent = info.categoryName;
         qtyCategoryBadge.className = `px-2 py-0.5 rounded text-[11px] font-semibold shrink-0 ${info.badgeClass}`;
-        qtyInput.value = record.quantity || 1;
+        QTY_CATS.forEach(k => { qtyCatInputs[k].value = c[k]; });
+        updateQtySummary();
         qtyModal.classList.remove('hidden');
-        qtyInput.focus();
-        qtyInput.select();
       }
 
       function closeQtyModal() {
@@ -1180,25 +1257,35 @@
         }
       }
 
-      document.getElementById('btnQtyMinus').addEventListener('click', () => {
-        qtyInput.value = Math.max(1, (parseInt(qtyInput.value, 10) || 1) - 1);
+      qtyModal.querySelectorAll('.qty-step').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const input = qtyCatInputs[btn.dataset.cat];
+          const next = (parseInt(input.value, 10) || 0) + parseInt(btn.dataset.step, 10);
+          input.value = Math.min(9999, Math.max(0, next));
+          updateQtySummary();
+        });
       });
-      document.getElementById('btnQtyPlus').addEventListener('click', () => {
-        qtyInput.value = Math.min(9999, (parseInt(qtyInput.value, 10) || 0) + 1);
-      });
+      Object.values(qtyCatInputs).forEach(input => input.addEventListener('input', updateQtySummary));
       document.getElementById('btnQtyClose').addEventListener('click', closeQtyModal);
 
       qtyForm.addEventListener('submit', (e) => {
         e.preventDefault();
+        const c = readQtyCats();
+        const total = QTY_CATS.reduce((sum, k) => sum + c[k], 0);
+        if (total < 1) {
+          showToast('수량은 1개 이상이어야 합니다.', 'warning');
+          return;
+        }
         const target = scanRecords.find(r => r.id === qtyRecordId);
         if (target) {
-          target.quantity = Math.min(9999, Math.max(1, parseInt(qtyInput.value, 10) || 1));
+          target.counts = c;
+          target.quantity = total;
           target.updatedAt = new Date().toISOString();
           saveData();
           renderTable();
           updateStats();
           updateLiveItemCard(target);
-          showToast(`수량 저장: ${target.code} (${target.quantity}개)`, 'success');
+          showToast(`수량 저장: ${target.code} (활용 ${c.new + c.used + c.repair} / 비활용 ${c.unused})`, 'success');
         }
         closeQtyModal();
       });
@@ -1641,9 +1728,10 @@
         scanRecords.forEach(item => {
           const code = String(item.code || '').replace(/[",\r\n]/g, '');
           if (!code) return;
-          const qty = item.quantity || 1;
+          const c = getCounts(item);
+          const active = c.new + c.used + c.repair;
           // 자산번호, 활용자산, 비활용자산, 실사수량, 신품, 중고품, 요정품, 비활용
-          csvRows.push([code, qty, 0, qty, qty, 0, 0, 0].join(','));
+          csvRows.push([code, active, c.unused, active + c.unused, c.new, c.used, c.repair, c.unused].join(','));
         });
         return csvRows.join('\r\n') + '\r\n';
       }
