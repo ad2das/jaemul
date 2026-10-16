@@ -675,11 +675,28 @@
        * Digits: 9 digits total.
        * Starts with: 1600 or 1200.
        */
-      function inspectBarcode(rawCode) {
+      function inspectBarcode(rawCode, format = '') {
         // Strip leading/trailing asterisks commonly present in Code 39
         let clean = String(rawCode || '').trim();
         if (clean.startsWith('*') && clean.endsWith('*') && clean.length > 2) {
           clean = clean.substring(1, clean.length - 1);
+        }
+
+        // Code 39 자산 라벨(700계열)은 끝에 Mod 43 체크문자가 붙어서 읽힘 (예: 70058757 → "70058757$")
+        // 체크문자가 맞으면 떼어냄
+        if (format === 'CODE_39' && clean.length > 1) {
+          const C39 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%';
+          const body = clean.slice(0, -1);
+          let sum = 0;
+          let valid = true;
+          for (const ch of body) {
+            const v = C39.indexOf(ch);
+            if (v < 0) { valid = false; break; }
+            sum += v;
+          }
+          if (valid && C39[sum % 43] === clean.slice(-1)) {
+            clean = body;
+          }
         }
 
         // 숫자만 포함되어 있는지 검사 (,나 알파벳 y 등 문자가 포함된 경우 빈값으로 처리하여 인식 차단)
@@ -852,7 +869,7 @@
       // 4. Record Processing Logic
       // -------------------------------------------------------------
       function handleScannedCode(rawCodeValue, formatName = 'CODE_128') {
-        const info = inspectBarcode(rawCodeValue);
+        const info = inspectBarcode(rawCodeValue, formatName);
         const code = info.code;
         const now = Date.now();
 
