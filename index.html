@@ -1806,11 +1806,9 @@
         const file = new File([encodeCsvCp949(csvContent)], fileName, { type: 'text/csv' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
-            await navigator.share({
-              files: [file],
-              title: subject,
-              text: summaryBody
-            });
+            // Files only: KakaoTalk (and some messengers) keep just the text and drop the attachment
+            // when a share carries both text and a file.
+            await navigator.share({ files: [file] });
             showToast('공유 창이 열렸습니다.', 'success');
             return;
           } catch (shareErr) {
