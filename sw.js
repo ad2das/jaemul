@@ -1,5 +1,5 @@
 /* Service worker — 2026년 재물조사 (offline-first static app) */
-const CACHE_NAME = 'jaemul-v1';
+const CACHE_NAME = 'jaemul-v2';
 const PRECACHE_URLS = [
   './',
   'index.html',
@@ -7,7 +7,9 @@ const PRECACHE_URLS = [
   'icons/icon-192.png',
   'icons/icon-512.png',
   'vendor/tailwindcss.js',
-  'vendor/html5-qrcode.min.js'
+  'vendor/html5-qrcode.min.js',
+  'vendor/barcode-detector.js',
+  'vendor/zxing_reader.wasm'
 ];
 
 self.addEventListener('install', (event) => {

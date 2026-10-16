@@ -17,7 +17,8 @@
     // Android WebView / Chromium has an incomplete BarcodeDetector implementation where Google Play Services
     // barcode vision module is not initialized, producing "E/cr_BarcodeDetectionImpl: BarcodeDetector is not operational"
     // and causing scanning to stall.
-    // Disabling BarcodeDetector forces html5-qrcode to use its robust built-in ZXing JavaScript engine.
+    // Native BarcodeDetector is hidden; only the zxing-cpp WASM polyfill (vendor/barcode-detector.js) may be installed
+    // through the setter below. If that fails to load, html5-qrcode falls back to its built-in ZXing-JS engine.
     (function() {
       try {
         delete window.BarcodeDetector;
@@ -31,7 +32,7 @@
       }
       try {
         Object.defineProperty(window, 'BarcodeDetector', {
-          get: function() { return undefined; },
+          get: function() { return window._barcodeDetector; },
           set: function(v) { window._barcodeDetector = v; },
           configurable: false,
           enumerable: false
@@ -43,6 +44,7 @@
   </script>
   <!-- html5-qrcode Barcode & QR Scanner Library -->
   <script src="vendor/html5-qrcode.min.js"></script>
+  <script src="vendor/barcode-detector.js"></script>
   <style>
     /* Custom animation for 1D linear barcode scanning laser */
     @keyframes scanline {
@@ -149,6 +151,10 @@
               <span class="absolute bottom-2 left-2 w-5 h-5 border-b-2 border-l-2 border-cyan-400"></span>
               <span class="absolute bottom-2 right-2 w-5 h-5 border-b-2 border-r-2 border-cyan-400"></span>
             </div>
+            <button id="btnTorch" type="button" class="hidden absolute top-2 right-2 pointer-events-auto inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-slate-900/85 border border-slate-700/80 text-xs font-semibold text-slate-200 backdrop-blur shadow-md active:scale-95 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              <span id="btnTorchLabel">플래시</span>
+            </button>
             <div class="mt-3 flex items-center gap-1.5 text-xs text-slate-200 bg-slate-900/85 px-3 py-1.5 rounded-full backdrop-blur border border-slate-700/80 pointer-events-auto shadow-md">
               <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/></svg>
               <span>화면 터치: 초점 맞추기</span>
@@ -631,6 +637,8 @@
       const cameraStatusText = document.getElementById('cameraStatusText');
       const btnStartCamera = document.getElementById('btnStartCamera');
       const btnStopCamera = document.getElementById('btnStopCamera');
+      const btnTorch = document.getElementById('btnTorch');
+      const btnTorchLabel = document.getElementById('btnTorchLabel');
 
       // Export Buttons
       const btnExportCsv = document.getElementById('btnExportCsv');
@@ -1426,6 +1434,48 @@
       // -------------------------------------------------------------
       // 8. Camera Management for Linear (1D) Barcodes
       // -------------------------------------------------------------
+      // zxing-cpp (WASM) reads blurry / low-contrast labels that html5-qrcode's built-in ZXing-JS misses.
+      // It is installed as window.BarcodeDetector (replacing any native one) so every phone uses the same decoder.
+      let zxingWasmReady = null;
+      function ensureZxingWasm() {
+        if (!zxingWasmReady) {
+          zxingWasmReady = (async () => {
+            if (typeof WebAssembly === 'undefined' || typeof BarcodeDetectionAPI === 'undefined') return false;
+            await BarcodeDetectionAPI.prepareZXingModule({
+              overrides: {
+                locateFile: (path, prefix) => path.endsWith('.wasm') ? new URL('vendor/' + path, location.href).href : prefix + path
+              },
+              fireImmediately: true
+            });
+            window.BarcodeDetector = BarcodeDetectionAPI.BarcodeDetector;
+            return true;
+          })().catch(() => false);
+        }
+        return zxingWasmReady;
+      }
+
+      let torchOn = false;
+      function resetTorchButton() {
+        torchOn = false;
+        btnTorch.classList.add('hidden');
+        btnTorch.classList.remove('bg-amber-500/90', 'text-slate-950');
+        btnTorchLabel.textContent = '플래시';
+      }
+
+      async function toggleTorch(e) {
+        e.stopPropagation();
+        if (!isScanning || !html5QrCode) return;
+        try {
+          await html5QrCode.applyVideoConstraints({ advanced: [{ torch: !torchOn }] });
+          torchOn = !torchOn;
+          btnTorch.classList.toggle('bg-amber-500/90', torchOn);
+          btnTorch.classList.toggle('text-slate-950', torchOn);
+          btnTorchLabel.textContent = torchOn ? '플래시 끄기' : '플래시';
+        } catch (_) {
+          showToast('이 기기에서는 플래시를 켤 수 없습니다.', 'warning');
+        }
+      }
+
       async function startCameraScanner() {
         unlockAudio();
         if (isScanning) return;
@@ -1451,12 +1501,13 @@
             Html5QrcodeSupportedFormats.QR_CODE
           ] : undefined;
 
+          const useZxingWasm = await ensureZxingWasm();
           if (!html5QrCode) {
             html5QrCode = new Html5Qrcode('qr-reader', {
               formatsToSupport: formatsToSupport,
               verbose: false,
               experimentalFeatures: {
-                useBarCodeDetectorIfSupported: false
+                useBarCodeDetectorIfSupported: useZxingWasm
               }
             });
           }
@@ -1489,14 +1540,17 @@
               return { width, height };
             },
             aspectRatio: 1.333333,
+            // 1D readers already try both directions; the mirrored retry only doubled the decode work
+            disableFlip: true,
             experimentalFeatures: {
-              useBarCodeDetectorIfSupported: false
+              useBarCodeDetectorIfSupported: useZxingWasm
             }
           };
-          // iOS Safari defaults to a low-res stream; thin 1D bars need more pixels
-          if (isIOS) {
-            scanConfig.videoConstraints = { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } };
-          }
+          // Browsers default to a low-res (640x480) stream; thin 1D bars need more pixels
+          scanConfig.videoConstraints = Object.assign(
+            typeof cameraConfig === 'string' ? { deviceId: { exact: cameraConfig } } : { facingMode: 'environment' },
+            { width: { ideal: 1920 }, height: { ideal: 1080 } }
+          );
 
           const lastRawScan = document.getElementById('lastRawScan');
           const onScanSuccess = (decodedText, decodedResult) => {
@@ -1558,19 +1612,22 @@
           scannerOverlay.classList.remove('hidden');
           scannerPlaceholder.classList.add('hidden');
 
-          if (isIOS) {
+          resetTorchButton();
+          try {
+            const caps = html5QrCode.getRunningTrackCapabilities();
+            if (caps && caps.torch) btnTorch.classList.remove('hidden');
+            const advanced = {};
             // Pro iPhones can't focus close with the main lens: zoom in so the user can hold the phone farther away
-            try {
-              const caps = html5QrCode.getRunningTrackCapabilities();
-              const advanced = {};
-              if (caps && caps.zoom && caps.zoom.max >= 2) advanced.zoom = Math.max(2, caps.zoom.min || 1);
-              if (caps && Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) advanced.focusMode = 'continuous';
-              if (Object.keys(advanced).length) {
-                html5QrCode.applyVideoConstraints({ advanced: [advanced] }).catch(() => {});
-              }
-            } catch (_) {
-              // zoom/focus not supported on this device
+            if (isIOS && caps && caps.zoom && caps.zoom.max >= 2) advanced.zoom = Math.max(2, caps.zoom.min || 1);
+            if (caps && Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) advanced.focusMode = 'continuous';
+            if (Object.keys(advanced).length) {
+              html5QrCode.applyVideoConstraints({ advanced: [advanced] }).catch(() => {});
             }
+          } catch (_) {
+            // capabilities (torch/zoom/focus) not available on this device
+          }
+
+          if (isIOS) {
             showToast('스캔 시작 — 바코드에서 15~20cm 떨어져서 비춰주세요', 'success');
           } else {
             showToast('1D 바코드(Code 128/39) 스캔이 시작되었습니다.', 'success');
@@ -1608,6 +1665,7 @@
 
           isScanning = false;
           html5QrCode = null;
+          resetTorchButton();
           updateCameraStatus(false, '스캔 중지됨');
           btnStartCamera.disabled = false;
           btnStartCamera.classList.remove('hidden');
@@ -1882,6 +1940,9 @@
             }
           });
         }
+
+        btnTorch.addEventListener('click', toggleTorch);
+        ensureZxingWasm();
 
         btnExportCsv.addEventListener('click', exportToCsvFile);
         btnShareMail.addEventListener('click', shareViaEmailOrWebShare);
