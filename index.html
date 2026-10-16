@@ -322,7 +322,7 @@
         <label class="flex items-center justify-between cursor-pointer p-2 rounded-xl bg-slate-950/60 border border-slate-800">
           <span class="text-xs text-slate-300 flex items-center gap-1.5 font-medium">
             <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-            스캔 후 입력창 띄우기 (자산명·위치·수량)
+            스캔 후 수량 입력창 띄우기
           </span>
           <input type="checkbox" id="chkAutoDetail" checked class="w-4 h-4 accent-cyan-500 cursor-pointer">
         </label>
@@ -522,6 +522,28 @@
     </div>
   </div>
 
+  <!-- Quick Quantity Modal (opens right after a scan; only 수량 goes into the ZFIAL0170 CSV) -->
+  <div id="qtyModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <form id="qtyForm" class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xs w-full p-5 shadow-2xl flex flex-col gap-4">
+      <div class="flex items-center justify-between gap-2">
+        <span id="qtyCodeVal" class="text-lg font-mono font-bold text-cyan-300 tracking-wider truncate"></span>
+        <span id="qtyCategoryBadge" class="px-2 py-0.5 rounded text-[11px] font-semibold shrink-0"></span>
+      </div>
+      <div>
+        <label for="qtyInput" class="block text-[11px] font-medium text-slate-300 mb-1.5">조사 수량</label>
+        <div class="flex items-center gap-2">
+          <button type="button" id="btnQtyMinus" class="w-12 h-12 shrink-0 rounded-xl bg-slate-800 text-white text-2xl font-bold active:bg-slate-700">−</button>
+          <input type="number" id="qtyInput" inputmode="numeric" min="1" max="9999" class="flex-1 min-w-0 h-12 bg-slate-950 border border-slate-800 rounded-xl text-center text-xl font-bold text-white outline-none focus:border-cyan-500">
+          <button type="button" id="btnQtyPlus" class="w-12 h-12 shrink-0 rounded-xl bg-slate-800 text-white text-2xl font-bold active:bg-slate-700">+</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" id="btnQtyClose" class="py-2.5 rounded-xl bg-slate-800 text-slate-300 text-sm font-medium hover:bg-slate-700">닫기</button>
+        <button type="submit" class="py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold shadow-lg shadow-cyan-600/20">확인</button>
+      </div>
+    </form>
+  </div>
+
   <!-- Manual Input Modal -->
   <div id="manualModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
@@ -586,7 +608,7 @@
         dupMode: 'increment', // 'increment' | 'ignore' | 'always'
         audioEnabled: true,
         vibrationEnabled: true,
-        autoOpenDetail: true, // open the 자산명/위치/수량 popup right after each scan
+        autoOpenDetail: true, // open the quantity popup right after each scan
         cooldownMs: 1500
       };
 
@@ -934,7 +956,7 @@
         updateLiveItemCard(activeRecord);
 
         if (settings.autoOpenDetail !== false && activeRecord) {
-          // Freeze scanning while the user types 자산명/위치/수량; resumed in closeDetailModal
+          // Freeze scanning while the quantity popup is open; resumed in closeQtyModal
           if (isScanning && html5QrCode && !scannerPausedForDetail) {
             try {
               html5QrCode.pause(true);
@@ -943,7 +965,7 @@
               // keep scanning if pause isn't possible
             }
           }
-          openDetailModal(activeRecord);
+          openQtyModal(activeRecord);
         }
       }
 
@@ -1077,23 +1099,10 @@
 
         detailModal.classList.remove('hidden');
         detailNameInput.focus();
-        detailNameInput.select(); // default name ('비품'/'공기구') gets replaced as soon as the user types
       }
 
       const closeDetailModal = () => {
         detailModal.classList.add('hidden');
-        if (scannerPausedForDetail) {
-          scannerPausedForDetail = false;
-          if (isScanning && html5QrCode) {
-            try {
-              html5QrCode.resume();
-            } catch (_) {
-              // scanner already stopped
-            }
-          }
-          // The camera is probably still on the same label: hold off re-reading it for an extra moment
-          lastScannedTime = Date.now() + 1500;
-        }
       };
 
       btnCloseDetailModal.addEventListener('click', closeDetailModal);
@@ -1132,6 +1141,66 @@
           deleteRecord(id);
           closeDetailModal();
         }
+      });
+
+      // Quick quantity popup shown right after a scan (scanner is paused while it's open)
+      const qtyModal = document.getElementById('qtyModal');
+      const qtyForm = document.getElementById('qtyForm');
+      const qtyInput = document.getElementById('qtyInput');
+      const qtyCodeVal = document.getElementById('qtyCodeVal');
+      const qtyCategoryBadge = document.getElementById('qtyCategoryBadge');
+      let qtyRecordId = null;
+
+      function openQtyModal(record) {
+        const info = inspectBarcode(record.code);
+        qtyRecordId = record.id;
+        qtyCodeVal.textContent = record.code;
+        qtyCategoryBadge.textContent = info.categoryName;
+        qtyCategoryBadge.className = `px-2 py-0.5 rounded text-[11px] font-semibold shrink-0 ${info.badgeClass}`;
+        qtyInput.value = record.quantity || 1;
+        qtyModal.classList.remove('hidden');
+        qtyInput.focus();
+        qtyInput.select();
+      }
+
+      function closeQtyModal() {
+        qtyModal.classList.add('hidden');
+        qtyRecordId = null;
+        if (scannerPausedForDetail) {
+          scannerPausedForDetail = false;
+          if (isScanning && html5QrCode) {
+            try {
+              html5QrCode.resume();
+            } catch (_) {
+              // scanner already stopped
+            }
+          }
+          // The camera is probably still on the same label: hold off re-reading it for an extra moment
+          lastScannedTime = Date.now() + 1500;
+        }
+      }
+
+      document.getElementById('btnQtyMinus').addEventListener('click', () => {
+        qtyInput.value = Math.max(1, (parseInt(qtyInput.value, 10) || 1) - 1);
+      });
+      document.getElementById('btnQtyPlus').addEventListener('click', () => {
+        qtyInput.value = Math.min(9999, (parseInt(qtyInput.value, 10) || 0) + 1);
+      });
+      document.getElementById('btnQtyClose').addEventListener('click', closeQtyModal);
+
+      qtyForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const target = scanRecords.find(r => r.id === qtyRecordId);
+        if (target) {
+          target.quantity = Math.min(9999, Math.max(1, parseInt(qtyInput.value, 10) || 1));
+          target.updatedAt = new Date().toISOString();
+          saveData();
+          renderTable();
+          updateStats();
+          updateLiveItemCard(target);
+          showToast(`수량 저장: ${target.code} (${target.quantity}개)`, 'success');
+        }
+        closeQtyModal();
       });
 
       // -------------------------------------------------------------
