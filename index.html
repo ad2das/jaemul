@@ -586,6 +586,9 @@
       let audioCtx = null;
       let currentActiveRecord = null; // currently selected record for detail inspection
 
+      // iOS detection (iPhone / iPad / iPod, including iPadOS reporting as MacIntel)
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
       // DOM Elements
       const scannerViewport = document.getElementById('scannerViewport');
       const qrReaderElement = document.getElementById('qr-reader');
@@ -772,6 +775,26 @@
       // -------------------------------------------------------------
       // 3. Audio & Vibration Feedback
       // -------------------------------------------------------------
+      function unlockAudio() {
+        try {
+          if (audioCtx && audioCtx.state === 'running') return;
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) return;
+          if (!audioCtx) audioCtx = new AudioContextClass();
+          if (audioCtx.state === 'suspended') {
+            const resumePromise = audioCtx.resume();
+            if (resumePromise && typeof resumePromise.catch === 'function') resumePromise.catch(() => {});
+          }
+          const buffer = audioCtx.createBuffer(1, 1, 22050);
+          const source = audioCtx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(audioCtx.destination);
+          source.start(0);
+        } catch (err) {
+          console.warn('Audio unlock failed:', err);
+        }
+      }
+
       function playBeepSound(type = 'success') {
         if (!settings.audioEnabled) return;
         try {
@@ -1272,6 +1295,7 @@
       // 8. Camera Management for Linear (1D) Barcodes
       // -------------------------------------------------------------
       async function startCameraScanner() {
+        unlockAudio();
         if (isScanning) return;
 
         if (typeof Html5Qrcode === 'undefined') {
@@ -1306,19 +1330,22 @@
           }
 
           let cameraConfig = { facingMode: 'environment' };
-          try {
-            if (typeof Html5Qrcode.getCameras === 'function') {
-              const cameras = await Html5Qrcode.getCameras();
-              if (cameras && cameras.length > 0) {
-                const backCam = cameras.find(c => {
-                  const lbl = (c.label || '').toLowerCase();
-                  return lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment');
-                });
-                cameraConfig = backCam ? backCam.id : cameras[0].id;
+          if (!isIOS) {
+            try {
+              if (typeof Html5Qrcode.getCameras === 'function') {
+                const cameras = await Html5Qrcode.getCameras();
+                if (cameras && cameras.length > 0) {
+                  const backCams = cameras.filter(c => {
+                    const lbl = (c.label || '').toLowerCase();
+                    return lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment') || lbl.includes('후면');
+                  });
+                  const backCam = backCams.find(c => !/ultra|초광각|tele|망원/i.test(c.label || '')) || backCams[0];
+                  cameraConfig = backCam ? backCam.id : cameras[0].id;
+                }
               }
+            } catch (_) {
+              cameraConfig = { facingMode: 'environment' };
             }
-          } catch (_) {
-            cameraConfig = { facingMode: 'environment' };
           }
 
           // Wide aspect scanner box optimized for standard 1D linear barcodes (Code 128 / Code 39)
@@ -1667,6 +1694,9 @@
       // 11. Event Listeners Setup
       // -------------------------------------------------------------
       function initEventListeners() {
+        // iOS Safari: unlock the WebAudio context on the first user gesture
+        ['touchend', 'pointerdown', 'click'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive: true }));
+
         btnStartCamera.addEventListener('click', startCameraScanner);
         btnStopCamera.addEventListener('click', stopCameraScanner);
 
