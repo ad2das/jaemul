@@ -1116,7 +1116,9 @@
       const QTY_CATS = ['new', 'used', 'repair', 'unused'];
 
       // Counts that always add up to record.quantity. Records from before the split (or whose quantity was
-      // changed by a scan / list −+ button) put the difference into 신품; decreases come off 신품 first.
+      // changed by a scan / list −+ button) put the difference into 중고품 — most surveyed assets are already
+      // in use; decreases come off 중고품 first, then 신품, 요정품, 비활용.
+      const QTY_FILL_ORDER = ['used', 'new', 'repair', 'unused'];
       function getCounts(record) {
         const total = Math.max(1, parseInt(record.quantity, 10) || 1);
         const c = { new: 0, used: 0, repair: 0, unused: 0 };
@@ -1124,8 +1126,8 @@
           QTY_CATS.forEach(k => { c[k] = Math.max(0, parseInt(record.counts[k], 10) || 0); });
         }
         let diff = total - QTY_CATS.reduce((sum, k) => sum + c[k], 0);
-        if (diff > 0) c.new += diff;
-        for (const k of QTY_CATS) {
+        if (diff > 0) c.used += diff;
+        for (const k of QTY_FILL_ORDER) {
           if (diff >= 0) break;
           const take = Math.min(c[k], -diff);
           c[k] -= take;
