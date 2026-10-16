@@ -181,6 +181,9 @@
           <div id="tapFocusContainer" class="absolute inset-0 pointer-events-none z-30 overflow-hidden"></div>
         </div>
 
+        <!-- Last raw decode (diagnostic: shows every decode, even rejected ones) -->
+        <p id="lastRawScan" class="hidden text-[10px] text-slate-500 font-mono truncate px-1"></p>
+
         <!-- Camera Control Action Buttons: '스캔 시작' / '스캔 중지' -->
         <div class="grid grid-cols-2 gap-2">
           <button id="btnStartCamera" class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold py-2.5 px-3 rounded-xl shadow-lg shadow-cyan-600/20 text-sm transition transform active:scale-[0.98]">
@@ -583,6 +586,8 @@
       let isScanning = false;
       let lastScannedCode = null;
       let lastScannedTime = 0;
+      let lastRejectedCode = null;
+      let lastRejectedTime = 0;
       let audioCtx = null;
       let currentActiveRecord = null; // currently selected record for detail inspection
 
@@ -849,9 +854,19 @@
       function handleScannedCode(rawCodeValue, formatName = 'CODE_128') {
         const info = inspectBarcode(rawCodeValue);
         const code = info.code;
-        if (!code) return;
-
         const now = Date.now();
+
+        if (!code) {
+          // Decoded but not a digits-only code: tell the user instead of dropping it silently
+          const raw = String(rawCodeValue || '').trim();
+          if (raw && !(raw === lastRejectedCode && (now - lastRejectedTime) < settings.cooldownMs)) {
+            lastRejectedCode = raw;
+            lastRejectedTime = now;
+            playBeepSound('duplicate');
+            showToast(`인식됐지만 숫자 바코드가 아님: ${raw.length > 30 ? raw.slice(0, 30) + '…' : raw}`, 'warning');
+          }
+          return;
+        }
 
         // Prevent immediate duplicate reading inside cooldown window
         if (code === lastScannedCode && (now - lastScannedTime) < settings.cooldownMs) {
@@ -1361,9 +1376,18 @@
               useBarCodeDetectorIfSupported: false
             }
           };
+          // iOS Safari defaults to a low-res stream; thin 1D bars need more pixels
+          if (isIOS) {
+            scanConfig.videoConstraints = { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } };
+          }
 
+          const lastRawScan = document.getElementById('lastRawScan');
           const onScanSuccess = (decodedText, decodedResult) => {
             const format = (decodedResult && decodedResult.result && decodedResult.result.format && decodedResult.result.format.formatName) || 'CODE_128';
+            if (lastRawScan) {
+              lastRawScan.textContent = `마지막 인식: ${decodedText} (${format}) ${formatShortTime(new Date())}`;
+              lastRawScan.classList.remove('hidden');
+            }
             handleScannedCode(decodedText, format);
           };
           const onScanError = () => {};
@@ -1384,7 +1408,18 @@
           cameraAttempts.push({ facingMode: { exact: 'environment' } });
           cameraAttempts.push(true);
 
+          if (scanConfig.videoConstraints) {
+            try {
+              await html5QrCode.start(cameraAttempts[0], scanConfig, onScanSuccess, onScanError);
+              startSuccess = true;
+            } catch (tryErr) {
+              lastStartError = tryErr;
+              delete scanConfig.videoConstraints;
+            }
+          }
+
           for (const config of cameraAttempts) {
+            if (startSuccess) break;
             try {
               await html5QrCode.start(config, scanConfig, onScanSuccess, onScanError);
               startSuccess = true;
@@ -1405,7 +1440,24 @@
           btnStopCamera.classList.remove('hidden');
           scannerOverlay.classList.remove('hidden');
           scannerPlaceholder.classList.add('hidden');
-          showToast('1D 바코드(Code 128/39) 스캔이 시작되었습니다.', 'success');
+
+          if (isIOS) {
+            // Pro iPhones can't focus close with the main lens: zoom in so the user can hold the phone farther away
+            try {
+              const caps = html5QrCode.getRunningTrackCapabilities();
+              const advanced = {};
+              if (caps && caps.zoom && caps.zoom.max >= 2) advanced.zoom = Math.max(2, caps.zoom.min || 1);
+              if (caps && Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) advanced.focusMode = 'continuous';
+              if (Object.keys(advanced).length) {
+                html5QrCode.applyVideoConstraints({ advanced: [advanced] }).catch(() => {});
+              }
+            } catch (_) {
+              // zoom/focus not supported on this device
+            }
+            showToast('스캔 시작 — 바코드에서 15~20cm 떨어져서 비춰주세요', 'success');
+          } else {
+            showToast('1D 바코드(Code 128/39) 스캔이 시작되었습니다.', 'success');
+          }
 
         } catch (err) {
           updateCameraStatus(false, '카메라 연결 실패');
