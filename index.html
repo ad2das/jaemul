@@ -1530,16 +1530,12 @@
       }
 
       function generateCsvString() {
-        // Same asset number scanned into several rows ('항상 추가' mode) → one row with summed quantity
-        const totals = new Map();
+        // One row per list entry ('항상 추가' rows stay separate, like the on-screen list)
+        const csvRows = [CSV_HEADERS.join(',')];
         scanRecords.forEach(item => {
           const code = String(item.code || '').replace(/[",\r\n]/g, '');
           if (!code) return;
-          totals.set(code, (totals.get(code) || 0) + (item.quantity || 1));
-        });
-
-        const csvRows = [CSV_HEADERS.join(',')];
-        totals.forEach((qty, code) => {
+          const qty = item.quantity || 1;
           // 자산번호, 활용자산, 비활용자산, 실사수량, 신품, 중고품, 요정품, 비활용
           csvRows.push([code, qty, 0, qty, qty, 0, 0, 0].join(','));
         });
