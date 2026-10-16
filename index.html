@@ -221,6 +221,9 @@
           <svg class="w-3.5 h-3.5 text-emerald-400 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           CSV 파일은 기기의 <strong class="text-slate-200 font-semibold">다운로드(Download) 폴더</strong>에 직접 저장됩니다.
         </p>
+        <p class="text-[11px] text-amber-300/90 text-center -mt-1">
+          카카오톡은 [공유]로 파일이 첨부되지 않습니다 → [CSV 다운] 후 카톡 <strong>＋ → 파일</strong>에서 다운로드 폴더의 CSV를 첨부하세요.
+        </p>
       </div>
 
       <!-- Live Scanned Item Info Card (스캔된 항목의 상세 정보 실시간 확인 카드) -->
@@ -1806,9 +1809,13 @@
         const file = new File([encodeCsvCp949(csvContent)], fileName, { type: 'text/csv' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
-            // Files only: KakaoTalk (and some messengers) keep just the text and drop the attachment
-            // when a share carries both text and a file.
-            await navigator.share({ files: [file] });
+            // KakaoTalk treats any text/* share (CSV included) as a text message and never attaches the file,
+            // with or without text, so keep the summary text for Kakao and the attachment for mail apps.
+            await navigator.share({
+              files: [file],
+              title: subject,
+              text: summaryBody
+            });
             showToast('공유 창이 열렸습니다.', 'success');
             return;
           } catch (shareErr) {
