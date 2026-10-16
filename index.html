@@ -1513,54 +1513,48 @@
       // -------------------------------------------------------------
       // 9. CSV Export & Share Logic (Saved directly to Downloads folder)
       // -------------------------------------------------------------
-      function sanitizeCsvCell(value) {
-        if (value === null || value === undefined) return '""';
-        let str = String(value);
-        const dangerousPrefixes = ['=', '+', '-', '@', '\t', '\r'];
-        if (str.length > 0 && dangerousPrefixes.includes(str.charAt(0))) {
-          str = "'" + str;
-        }
-        const escaped = str.replace(/"/g, '""');
-        return `"${escaped}"`;
+      // ZFIAL0170 업로드 양식: CP949, BOM 없음, CRLF, 자산번호별 1행
+      const CSV_HEADERS = ['자산번호', '활용자산', '비활용자산', '실사수량', '신품', '중고품', '요정품', '비활용'];
+      // CP949 bytes of the header line above (browsers can't encode CP949 natively; data rows are ASCII)
+      const CSV_HEADER_CP949 = new Uint8Array([
+        0xc0, 0xda, 0xbb, 0xea, 0xb9, 0xf8, 0xc8, 0xa3, 0x2c, 0xc8, 0xb0, 0xbf, 0xeb, 0xc0, 0xda, 0xbb,
+        0xea, 0x2c, 0xba, 0xf1, 0xc8, 0xb0, 0xbf, 0xeb, 0xc0, 0xda, 0xbb, 0xea, 0x2c, 0xbd, 0xc7, 0xbb,
+        0xe7, 0xbc, 0xf6, 0xb7, 0xae, 0x2c, 0xbd, 0xc5, 0xc7, 0xb0, 0x2c, 0xc1, 0xdf, 0xb0, 0xed, 0xc7,
+        0xb0, 0x2c, 0xbf, 0xe4, 0xc1, 0xa4, 0xc7, 0xb0, 0x2c, 0xba, 0xf1, 0xc8, 0xb0, 0xbf, 0xeb
+      ]);
+
+      function getCsvFileName() {
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        return `ZFIAL0170_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}.CSV`;
       }
 
       function generateCsvString() {
-        const headers = [
-          '순번',
-          '자산번호',
-          '활용자산',
-          '비활용자산',
-          '실사수량',
-          '신품',
-          '중고품',
-          '요정품',
-          '비활용',
-          '스캔일시',
-          '비고'
-        ];
-        const csvRows = [];
-        csvRows.push(headers.map(sanitizeCsvCell).join(','));
-
-        scanRecords.forEach((item, idx) => {
-          const qty = item.quantity || 1;
-          const row = [
-            idx + 1,
-            item.code || '',               // 자산번호 (기존 바코드번호)
-            qty,                           // 활용자산 (기존 수량)
-            0,                             // 비활용자산
-            qty,                           // 실사수량
-            qty,                           // 신품
-            0,                             // 중고품
-            0,                             // 요정품
-            0,                             // 비활용
-            formatDateTime(item.timestamp),// 스캔일시
-            item.memo || ''                // 비고 (기존 설치위치및비고)
-          ];
-          csvRows.push(row.map(sanitizeCsvCell).join(','));
+        // Same asset number scanned into several rows ('항상 추가' mode) → one row with summed quantity
+        const totals = new Map();
+        scanRecords.forEach(item => {
+          const code = String(item.code || '').replace(/[",\r\n]/g, '');
+          if (!code) return;
+          totals.set(code, (totals.get(code) || 0) + (item.quantity || 1));
         });
 
-        // Prepend UTF-8 BOM (\uFEFF) for Excel compatibility
-        return '\uFEFF' + csvRows.join('\r\n');
+        const csvRows = [CSV_HEADERS.join(',')];
+        totals.forEach((qty, code) => {
+          // 자산번호, 활용자산, 비활용자산, 실사수량, 신품, 중고품, 요정품, 비활용
+          csvRows.push([code, qty, 0, qty, qty, 0, 0, 0].join(','));
+        });
+        return csvRows.join('\r\n') + '\r\n';
+      }
+
+      function encodeCsvCp949(csvText) {
+        const body = csvText.slice(csvText.indexOf('\r\n'));
+        const bytes = new Uint8Array(CSV_HEADER_CP949.length + body.length);
+        bytes.set(CSV_HEADER_CP949, 0);
+        for (let i = 0; i < body.length; i++) {
+          const c = body.charCodeAt(i);
+          bytes[CSV_HEADER_CP949.length + i] = c < 0x80 ? c : 0x3f; // '?' for anything non-ASCII
+        }
+        return bytes;
       }
 
       function exportToCsvFile() {
@@ -1570,9 +1564,7 @@
         }
 
         const csvContent = generateCsvString();
-        const now = new Date();
-        const pad = n => String(n).padStart(2, '0');
-        const fileName = `2026_재물조사_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.csv`;
+        const fileName = getCsvFileName();
 
         // Check native Android Bridge (Saves to Environment.DIRECTORY_DOWNLOADS)
         if (window.AndroidBridge && typeof window.AndroidBridge.saveCsvFile === 'function') {
@@ -1581,7 +1573,7 @@
         }
 
         // Web Browser Fallback
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob([encodeCsvCp949(csvContent)], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.setAttribute('href', url);
@@ -1603,8 +1595,7 @@
 
         const csvContent = generateCsvString();
         const now = new Date();
-        const pad = n => String(n).padStart(2, '0');
-        const fileName = `2026_재물조사_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}.csv`;
+        const fileName = getCsvFileName();
         
         let count1600 = 0;
         let count1200 = 0;
@@ -1639,7 +1630,7 @@
         // Web Share API Check
         // Chrome/Samsung Internet only allow an exact 'text/csv' MIME type for shared files
         // ('text/csv;charset=utf-8' is rejected → share fails). The BOM already marks it as UTF-8.
-        const file = new File([csvContent], fileName, { type: 'text/csv' });
+        const file = new File([encodeCsvCp949(csvContent)], fileName, { type: 'text/csv' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
             await navigator.share({
