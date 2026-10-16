@@ -253,18 +253,6 @@
             </span>
           </div>
 
-          <!-- Quick Name & Memo edit -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            <div>
-              <label class="block text-[10px] text-slate-400 mb-0.5">자산명</label>
-              <input type="text" id="liveItemNameInput" placeholder="자산명 입력..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-500">
-            </div>
-            <div>
-              <label class="block text-[10px] text-slate-400 mb-0.5">설치 위치 / 비고 메모</label>
-              <input type="text" id="liveItemMemoInput" placeholder="예: 3층 회의실, 204호..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-500">
-            </div>
-          </div>
-
           <!-- Quantity and Quick Actions -->
           <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 text-xs">
             <span class="text-slate-400">등록 수량: <strong id="liveItemQty" class="text-white font-bold">1</strong>개</span>
@@ -368,7 +356,7 @@
         <div class="flex items-center justify-between gap-2">
           <!-- Search & Filter Bar -->
           <div class="relative flex-1">
-            <input type="text" id="searchInput" placeholder="바코드(9자리), 자산명, 위치 메모로 실시간 검색..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-cyan-500">
+            <input type="text" id="searchInput" placeholder="바코드 번호로 실시간 검색..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-cyan-500">
             <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           </div>
 
@@ -406,7 +394,7 @@
               <tr>
                 <th class="py-2.5 px-2.5 w-8 text-center">#</th>
                 <th class="py-2.5 px-3 min-w-[130px]">바코드 번호 (자산구분)</th>
-                <th class="py-2.5 px-2.5 min-w-[110px]">자산명 / 위치</th>
+                <th class="py-2.5 px-2.5 min-w-[90px]">활용 / 비활용</th>
                 <th class="py-2.5 px-2 text-center w-16">수량</th>
                 <th class="py-2.5 px-2 text-slate-400 text-center w-20">스캔시간</th>
                 <th class="py-2.5 px-2 text-center w-16">관리</th>
@@ -485,16 +473,6 @@
         <form id="detailForm" class="flex flex-col gap-2.5">
           <input type="hidden" id="detailRecordId">
 
-          <div>
-            <label class="block text-[11px] font-medium text-slate-300 mb-1">자산명</label>
-            <input type="text" id="detailNameInput" placeholder="예: 모니터, 업무용 PC, 책상, 회의용 의자..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500">
-          </div>
-
-          <div>
-            <label class="block text-[11px] font-medium text-slate-300 mb-1">설치 위치 및 비고 메모</label>
-            <input type="text" id="detailMemoInput" placeholder="예: 본관 3층 대회의실 북측, 관리부 204호..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 outline-none focus:border-cyan-500">
-          </div>
-
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-[11px] font-medium text-slate-300 mb-1">조사 수량</label>
@@ -517,7 +495,6 @@
             </button>
             <div class="flex items-center gap-2">
               <button type="button" id="btnCancelDetail" class="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-medium hover:bg-slate-700">닫기</button>
-              <button type="submit" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-lg shadow-cyan-600/20">정보 저장</button>
             </div>
           </div>
         </form>
@@ -587,14 +564,6 @@
           <label class="block text-xs font-medium text-slate-300 mb-1">바코드 9자리 번호 (필수)</label>
           <input type="text" id="manualCodeInput" required placeholder="예: 160012345 또는 120098765" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-600 outline-none focus:border-cyan-500 font-mono">
           <p class="text-[11px] text-cyan-300/80 mt-1">※ 재물조사 표준 자산번호는 1600 또는 1200으로 시작하는 9자리 숫자입니다.</p>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1">자산명 (선택)</label>
-          <input type="text" id="manualNameInput" placeholder="예: 사무용 PC, 레이저 프린터, 회의용 탁자..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-600 outline-none focus:border-cyan-500">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1">위치 / 비고 메모 (선택)</label>
-          <input type="text" id="manualMemoInput" placeholder="예: 3층 회의실, 본관 201호..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-600 outline-none focus:border-cyan-500">
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
@@ -677,8 +646,6 @@
       const liveItemAssetBadge = document.getElementById('liveItemAssetBadge');
       const liveItemFormatBadge = document.getElementById('liveItemFormatBadge');
       const liveItemSpecText = document.getElementById('liveItemSpecText');
-      const liveItemNameInput = document.getElementById('liveItemNameInput');
-      const liveItemMemoInput = document.getElementById('liveItemMemoInput');
       const liveItemQty = document.getElementById('liveItemQty');
       const btnOpenDetailModal = document.getElementById('btnOpenDetailModal');
 
@@ -720,8 +687,6 @@
       const detailAssetCategoryBadge = document.getElementById('detailAssetCategoryBadge');
       const detailFormatVal = document.getElementById('detailFormatVal');
       const detailSpecVal = document.getElementById('detailSpecVal');
-      const detailNameInput = document.getElementById('detailNameInput');
-      const detailMemoInput = document.getElementById('detailMemoInput');
       const detailQtyVal = document.getElementById('detailQtyVal');
       const detailTimeVal = document.getElementById('detailTimeVal');
       const btnCopyBarcode = document.getElementById('btnCopyBarcode');
@@ -1063,31 +1028,8 @@
           `;
         }
 
-        liveItemNameInput.value = record.name || '';
-        liveItemMemoInput.value = record.memo || '';
         liveItemQty.textContent = record.quantity || 1;
       }
-
-      // Live Card Quick Save Listeners
-      liveItemNameInput.addEventListener('change', (e) => {
-        if (currentActiveRecord) {
-          currentActiveRecord.name = e.target.value.trim();
-          currentActiveRecord.updatedAt = new Date().toISOString();
-          saveData();
-          renderTable();
-          showToast('자산명이 저장되었습니다.', 'info');
-        }
-      });
-
-      liveItemMemoInput.addEventListener('change', (e) => {
-        if (currentActiveRecord) {
-          currentActiveRecord.memo = e.target.value.trim();
-          currentActiveRecord.updatedAt = new Date().toISOString();
-          saveData();
-          renderTable();
-          showToast('위치/비고 메모가 저장되었습니다.', 'info');
-        }
-      });
 
       btnOpenDetailModal.addEventListener('click', () => {
         if (currentActiveRecord) {
@@ -1111,14 +1053,11 @@
         detailSpecVal.textContent = info.specText;
         detailSpecVal.className = info.specValid ? 'font-medium text-emerald-400' : 'font-medium text-amber-400';
 
-        detailNameInput.value = record.name || '';
-        detailMemoInput.value = record.memo || '';
         const counts = getCounts(record);
         detailQtyVal.textContent = `${record.quantity || 1}개 (활용 ${counts.new + counts.used + counts.repair} / 비활용 ${counts.unused})`;
         detailTimeVal.textContent = formatDateTime(record.timestamp);
 
         detailModal.classList.remove('hidden');
-        detailNameInput.focus();
       }
 
       const closeDetailModal = () => {
@@ -1135,31 +1074,12 @@
         }
       });
 
-      detailForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const id = detailRecordId.value;
-        const target = scanRecords.find(r => r.id === id);
-        if (!target) return;
+      detailForm.addEventListener('submit', (e) => e.preventDefault());
 
-        target.name = detailNameInput.value.trim();
-        target.memo = detailMemoInput.value.trim();
-        target.updatedAt = new Date().toISOString();
-
-        saveData();
-        renderTable();
-        updateStats();
-        updateLiveItemCard(target);
-        closeDetailModal();
-        showToast('자산 상세 정보가 저장되었습니다.', 'success');
-      });
-
-      // 수량 분류 편집: keep what was typed in 자산명/위치, then switch to the quantity popup
+      // 수량 분류 편집: switch from the detail popup to the quantity popup
       document.getElementById('detailQtyBtn').addEventListener('click', () => {
         const target = scanRecords.find(r => r.id === detailRecordId.value);
         if (!target) return;
-        target.name = detailNameInput.value.trim();
-        target.memo = detailMemoInput.value.trim();
-        saveData();
         closeDetailModal();
         openQtyModal(target);
       });
@@ -1370,21 +1290,19 @@
 
           tr.appendChild(tdCode);
 
-          // Item Name & Memo
-          const tdName = document.createElement('td');
-          tdName.className = 'py-2.5 px-2.5';
-          const nameSpan = document.createElement('div');
-          nameSpan.className = 'text-xs text-slate-200 font-medium truncate max-w-[140px]';
-          nameSpan.textContent = item.name || '자산명 미지정';
-          tdName.appendChild(nameSpan);
-
-          if (item.memo) {
-            const memoSpan = document.createElement('div');
-            memoSpan.className = 'text-[10px] text-slate-400 truncate max-w-[140px] flex items-center gap-1';
-            memoSpan.innerHTML = `<svg class="w-3 h-3 text-slate-500 inline shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>${escapeHtml(item.memo)}`;
-            tdName.appendChild(memoSpan);
-          }
-          tr.appendChild(tdName);
+          // 활용 / 비활용 split
+          const counts = getCounts(item);
+          const tdSplit = document.createElement('td');
+          tdSplit.className = 'py-2.5 px-2.5 text-xs whitespace-nowrap';
+          const activeSpan = document.createElement('div');
+          activeSpan.className = 'text-emerald-300 font-medium';
+          activeSpan.textContent = `활용 ${counts.new + counts.used + counts.repair}`;
+          const unusedSpan = document.createElement('div');
+          unusedSpan.className = counts.unused ? 'text-amber-300 font-medium' : 'text-slate-500';
+          unusedSpan.textContent = `비활용 ${counts.unused}`;
+          tdSplit.appendChild(activeSpan);
+          tdSplit.appendChild(unusedSpan);
+          tr.appendChild(tdSplit);
 
           // Quantity controls
           const tdQty = document.createElement('td');
@@ -1805,7 +1723,8 @@
         summaryBody += `■ 1200계열(공기구): ${count1200}건\r\n\r\n`;
         summaryBody += `[상위 스캔 품목 요약]\r\n`;
         scanRecords.slice(0, 10).forEach((item, idx) => {
-          summaryBody += `${idx + 1}. [${item.code}] ${item.name || '자산명 없음'} (수량: ${item.quantity}개, 위치: ${item.memo || '-'})\r\n`;
+          const c = getCounts(item);
+          summaryBody += `${idx + 1}. [${item.code}] 실사 ${item.quantity}개 (활용 ${c.new + c.used + c.repair} / 비활용 ${c.unused})\r\n`;
         });
         if (scanRecords.length > 10) {
           summaryBody += `... 외 ${scanRecords.length - 10}건 (전체 데이터는 첨부 CSV 파일 참조)\r\n`;
@@ -2025,8 +1944,6 @@
         manualForm.addEventListener('submit', (e) => {
           e.preventDefault();
           const codeInput = document.getElementById('manualCodeInput').value.trim();
-          const nameInput = document.getElementById('manualNameInput').value.trim();
-          const memoInput = document.getElementById('manualMemoInput').value.trim();
           const qty = parseInt(document.getElementById('manualQtyInput').value, 10) || 1;
           const format = document.getElementById('manualFormatInput').value || 'CODE_128';
 
@@ -2038,13 +1955,11 @@
 
           if (existing && settings.dupMode === 'increment') {
             existing.quantity = (existing.quantity || 1) + qty;
-            if (nameInput) existing.name = nameInput;
-            if (memoInput) existing.memo = memoInput;
             existing.updatedAt = new Date().toISOString();
             item = existing;
             showToast(`기존 바코드 수량 증가 (+${qty}): ${info.code}`, 'info');
           } else {
-            item = addNewRecord(info.code, nameInput, memoInput, format, qty, info);
+            item = addNewRecord(info.code, '', '', format, qty, info);
             showToast(`바코드 추가 완료: ${info.code}`, 'success');
           }
 
