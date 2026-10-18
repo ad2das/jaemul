@@ -1873,7 +1873,8 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        // iOS Safari reads the blob after click() returns; revoking right away can cancel the download
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
 
         showToast(`다운로드 폴더에 저장되었습니다: ${fileName}`, 'success');
       }

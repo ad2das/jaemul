@@ -1,5 +1,5 @@
 /* Service worker — 2026년 재물조사 (offline-first static app) */
-const CACHE_NAME = 'jaemul-v2';
+const CACHE_NAME = 'jaemul-v3';
 const PRECACHE_URLS = [
   './',
   'index.html',
@@ -41,11 +41,20 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req).then((response) => {
         if (response && response.ok) {
+          // Only the app shell is stored as index.html; other pages (selftest.html) are cached under their own URL
+          const path = new URL(req.url).pathname;
+          const isApp = path.endsWith('/') || path.endsWith('/index.html');
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('index.html', copy));
+          caches.open(CACHE_NAME).then((cache) => cache.put(isApp ? 'index.html' : req, copy));
         }
         return response;
-      }).catch(() => caches.match('index.html').then((cached) => cached || caches.match('./')))
+      }).catch(() => {
+        const path = new URL(req.url).pathname;
+        const isApp = path.endsWith('/') || path.endsWith('/index.html');
+        return (isApp ? caches.match('index.html') : caches.match(req))
+          .then((cached) => cached || caches.match('index.html'))
+          .then((cached) => cached || caches.match('./'));
+      })
     );
     return;
   }

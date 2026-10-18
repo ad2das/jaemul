@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>재물조사 기기 점검</title>
+  <style>
+    body { margin: 0; padding: 16px; font: 14px/1.5 -apple-system, "Malgun Gothic", sans-serif; background: #0f172a; color: #e2e8f0; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    p.sub { margin: 0 0 12px; color: #94a3b8; font-size: 12px; }
+    button { font: inherit; font-weight: 700; border: 0; border-radius: 10px; padding: 12px 14px; margin: 4px 4px 4px 0; background: #0891b2; color: #fff; }
+    button.gray { background: #334155; }
+    button:disabled { opacity: .4; }
+    #log { margin-top: 12px; }
+    .row { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid #1e293b; font-size: 13px; }
+    .tag { flex: 0 0 44px; font-weight: 800; text-align: center; border-radius: 6px; font-size: 11px; padding: 2px 0; height: 18px; }
+    .PASS { background: #065f46; color: #a7f3d0; } .FAIL { background: #7f1d1d; color: #fecaca; }
+    .WARN { background: #78350f; color: #fde68a; } .INFO { background: #1e3a8a; color: #bfdbfe; }
+    .msg { flex: 1; word-break: break-all; }
+    video { width: 100%; max-height: 260px; background: #000; border-radius: 10px; margin-top: 8px; display: none; object-fit: cover; }
+    #summary { font-weight: 800; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>재물조사 사이트 기기 점검</h1>
+  <p class="sub">이 폰에서 스캔 기능이 제대로 동작하는지 확인합니다. 저장된 스캔 기록은 건드리지 않습니다.</p>
+  <button id="btnAuto">1. 기본 점검</button>
+  <button id="btnCam">2. 카메라 점검</button>
+  <button id="btnTorch" class="gray" disabled>플래시 1초 켜기</button>
+  <button id="btnCopy" class="gray">결과 복사</button>
+  <video id="v" playsinline muted autoplay></video>
+  <div id="summary"></div>
+  <div id="log"></div>
+
+  <script src="vendor/barcode-detector.js"></script>
+  <script>
+  (function () {
+    const logEl = document.getElementById('log');
+    const lines = [];
+    const counts = { PASS: 0, FAIL: 0, WARN: 0 };
+    function add(tag, msg) {
+      lines.push(`[${tag}] ${msg}`);
+      if (counts[tag] !== undefined) counts[tag]++;
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `<span class="tag ${tag}">${tag}</span><span class="msg"></span>`;
+      row.querySelector('.msg').textContent = msg;
+      logEl.appendChild(row);
+      document.getElementById('summary').textContent = `통과 ${counts.PASS} · 실패 ${counts.FAIL} · 주의 ${counts.WARN}`;
+    }
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    let detector = null;
+    async function getDetector() {
+      if (detector) return detector;
+      await BarcodeDetectionAPI.prepareZXingModule({
+        overrides: { locateFile: (p, prefix) => p.endsWith('.wasm') ? new URL('vendor/' + p, location.href).href : prefix + p },
+        fireImmediately: true
+      });
+      detector = new BarcodeDetectionAPI.BarcodeDetector({ formats: ['code_128', 'code_39', 'code_93', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'] });
+      return detector;
+    }
+
+    async function basic() {
+      document.getElementById('btnAuto').disabled = true;
+      const ua = navigator.userAgent;
+      add('INFO', '기기/브라우저: ' + ua);
+      const iosVer = (ua.match(/OS (\d+)_(\d+)/) || [])[1];
+      if (/iPhone|iPad/.test(ua)) add(iosVer && +iosVer >= 15 ? 'PASS' : 'WARN', `iOS 버전 ${iosVer || '?'} (15 이상 권장)`);
+      if (/KAKAOTALK|NAVER\(inapp|; ?wv\)|Instagram|FBAN|FBAV|Line\/|BAND\//i.test(ua)) add('FAIL', '앱 안의 브라우저(카톡/네이버 등)로 열려 있습니다. Safari/Chrome/삼성 인터넷으로 여세요.');
+      add(window.isSecureContext ? 'PASS' : 'FAIL', '보안 연결(https)');
+      add(typeof WebAssembly === 'object' ? 'PASS' : 'FAIL', 'WebAssembly 지원 (새 바코드 해독기)');
+      add(navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? 'PASS' : 'FAIL', '카메라 API 지원');
+
+      try {
+        const t = performance.now();
+        await getDetector();
+        add('PASS', `바코드 해독기 로드 (${Math.round(performance.now() - t)}ms)`);
+      } catch (e) {
+        add('FAIL', '바코드 해독기 로드 실패 → 예전 해독기로 동작: ' + e);
+      }
+
+      if (detector) {
+        const cases = [
+          ['selftest/blur.jpg', '160012345', '흐린 바코드'],
+          ['selftest/dark.jpg', '160054321', '어두운 바코드'],
+          ['selftest/normal.jpg', '120000002', '일반 바코드'],
+          ['selftest/s700.jpg', '70012345$', '700번대(Code39)']
+        ];
+        for (const [src, want, name] of cases) {
+          try {
+            const img = new Image();
+            img.src = src;
+            await img.decode();
+            const c = document.createElement('canvas');
+            c.width = img.naturalWidth; c.height = img.naturalHeight;
+            c.getContext('2d').drawImage(img, 0, 0);
+            const t = performance.now();
+            const r = await detector.detect(c);
+            const ms = Math.round(performance.now() - t);
+            const got = [...new Set(r.map(x => x.rawValue))];
+            add(got.includes(want) ? 'PASS' : 'FAIL', `${name} 사진 해독 → ${got.join(',') || '없음'} (${ms}ms)`);
+          } catch (e) {
+            add('FAIL', `${name} 사진 해독 오류: ${e}`);
+          }
+        }
+      }
+
+      try {
+        const k = '__jaemul_selftest__';
+        localStorage.setItem(k, 'x'.repeat(100000));
+        const ok = localStorage.getItem(k).length === 100000;
+        localStorage.removeItem(k);
+        add(ok ? 'PASS' : 'FAIL', '기록 저장소(localStorage) 쓰기/읽기');
+      } catch (e) {
+        add('FAIL', '기록 저장소 사용 불가 (사파리 개인정보 보호 모드?): ' + e);
+      }
+
+      try {
+        const f = new File([new Uint8Array([65, 44, 66, 13, 10])], 'ZFIAL0170_TEST.CSV', { type: 'text/csv' });
+        const can = !!(navigator.canShare && navigator.canShare({ files: [f] }));
+        add(can ? 'PASS' : 'WARN', can ? '공유 버튼으로 CSV 파일 첨부 가능' : '공유로 파일 첨부 불가 → [CSV 다운] 후 직접 첨부');
+      } catch (e) {
+        add('WARN', '공유 기능 확인 실패: ' + e);
+      }
+      add('INFO', '기본 점검 끝. 이어서 [2. 카메라 점검]을 눌러주세요.');
+      document.getElementById('btnAuto').disabled = false;
+    }
+
+    let stream = null, track = null;
+    async function camera() {
+      document.getElementById('btnCam').disabled = true;
+      const v = document.getElementById('v');
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } });
+      } catch (e) {
+        add('FAIL', '카메라 켜기 실패 (권한 거부?): ' + (e.name || '') + ' ' + (e.message || e));
+        document.getElementById('btnCam').disabled = false;
+        return;
+      }
+      track = stream.getVideoTracks()[0];
+      v.style.display = 'block';
+      v.srcObject = stream;
+      try { await v.play(); } catch (_) { /* autoplay */ }
+      await sleep(1200);
+      const s = track.getSettings ? track.getSettings() : {};
+      add('PASS', `카메라 켜짐: ${track.label || '이름 없음'}`);
+      const w = v.videoWidth, h = v.videoHeight;
+      add(Math.max(w, h) >= 1280 ? 'PASS' : 'WARN', `실제 해상도 ${w}x${h}` + (Math.max(w, h) >= 1280 ? '' : ' (낮음: 작은 바코드 인식이 떨어질 수 있음)'));
+      add(s.facingMode === 'user' ? 'FAIL' : 'PASS', `카메라 방향: ${s.facingMode || '알 수 없음(보통 후면)'}`);
+
+      const caps = track.getCapabilities ? track.getCapabilities() : {};
+      if (caps.zoom) {
+        add('PASS', `배율 지원: ${caps.zoom.min}x ~ ${caps.zoom.max}x → 배율 버튼이 보입니다`);
+        try {
+          const target = Math.min(caps.zoom.max, 2);
+          await track.applyConstraints({ advanced: [{ zoom: target }] });
+          await sleep(500);
+          const z = track.getSettings().zoom;
+          add(Math.abs(z - target) < 0.2 ? 'PASS' : 'FAIL', `배율 ${target}x 적용 → 현재 ${z}x`);
+          await track.applyConstraints({ advanced: [{ zoom: caps.zoom.min }] });
+        } catch (e) {
+          add('FAIL', '배율 적용 실패: ' + e);
+        }
+      } else {
+        add('WARN', '이 브라우저는 웹 배율 조절 미지원 → 배율 버튼이 안 보입니다 (바코드에 가까이 대세요)');
+      }
+      if (caps.torch) {
+        add('PASS', '플래시 지원 → [플래시 1초 켜기]로 확인하세요');
+        document.getElementById('btnTorch').disabled = false;
+      } else {
+        add('WARN', '이 브라우저는 웹 플래시 미지원 → 플래시 버튼이 안 보입니다');
+      }
+      const modes = caps.focusMode || [];
+      add(modes.length ? 'PASS' : 'WARN', `초점 모드: ${modes.join(', ') || '조절 불가(기기 자동초점만 사용)'}`);
+      const sc = navigator.mediaDevices.getSupportedConstraints ? navigator.mediaDevices.getSupportedConstraints() : {};
+      if (modes.includes('single-shot') || modes.includes('continuous')) {
+        try {
+          const adv = { focusMode: modes.includes('single-shot') ? 'single-shot' : 'continuous' };
+          if (sc.pointsOfInterest) adv.pointsOfInterest = [{ x: 0.5, y: 0.5 }];
+          await track.applyConstraints({ advanced: [adv] });
+          if (modes.includes('continuous')) await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+          add('PASS', `화면 터치 초점 요청 동작 (${adv.focusMode}${sc.pointsOfInterest ? ' + 터치 위치' : ', 위치 지정 미지원'})`);
+        } catch (e) {
+          add('FAIL', '초점 요청 실패: ' + e);
+        }
+      }
+
+      // Live decode: same center region the app uses
+      try {
+        await getDetector();
+        add('INFO', '실시간 해독 10초: 1600/1200 바코드를 화면 가운데에 비춰보세요');
+        const c = document.createElement('canvas');
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        const end = Date.now() + 10000;
+        let frames = 0, total = 0, found = null;
+        while (Date.now() < end) {
+          const vw = v.videoWidth, vh = v.videoHeight;
+          const rw = Math.round(vw * 0.92), rh = Math.round(Math.min(vh * 0.5, rw * 0.55));
+          const cw = Math.min(rw, 1280), ch = Math.round(rh * cw / rw);
+          c.width = cw; c.height = ch;
+          ctx.drawImage(v, (vw - rw) / 2, (vh - rh) / 2, rw, rh, 0, 0, cw, ch);
+          const t = performance.now();
+          const r = await detector.detect(c);
+          total += performance.now() - t; frames++;
+          if (r.length && !found) { found = r[0].rawValue; add('PASS', `실시간 인식: ${found} (${r[0].format})`); }
+          await sleep(30);
+        }
+        const avg = Math.round(total / Math.max(1, frames));
+        add(avg < 250 ? 'PASS' : 'WARN', `해독 속도: 프레임당 평균 ${avg}ms (초당 ${(frames / 10).toFixed(1)}회 시도)`);
+        if (!found) add('INFO', '10초 동안 바코드를 못 읽음 (바코드를 안 비췄다면 정상)');
+      } catch (e) {
+        add('FAIL', '실시간 해독 오류: ' + e);
+      }
+      add('INFO', '카메라 점검 끝. [결과 복사]를 눌러 보내주세요.');
+      document.getElementById('btnCam').disabled = false;
+    }
+
+    async function torch() {
+      if (!track) return;
+      try {
+        await track.applyConstraints({ advanced: [{ torch: true }] });
+        await sleep(1000);
+        await track.applyConstraints({ advanced: [{ torch: false }] });
+        add('INFO', '플래시 명령 보냄 — 실제로 1초 켜졌는지 눈으로 확인');
+      } catch (e) {
+        add('FAIL', '플래시 켜기 실패: ' + e);
+      }
+    }
+
+    document.getElementById('btnAuto').addEventListener('click', basic);
+    document.getElementById('btnCam').addEventListener('click', camera);
+    document.getElementById('btnTorch').addEventListener('click', torch);
+    document.getElementById('btnCopy').addEventListener('click', async () => {
+      const text = `재물조사 기기 점검 ${new Date().toLocaleString()}\n` + document.getElementById('summary').textContent + '\n' + lines.join('\n');
+      try { await navigator.clipboard.writeText(text); alert('복사됨. 카톡 등에 붙여넣어 보내주세요.'); }
+      catch (_) { window.prompt('아래 내용을 복사하세요', text); }
+    });
+  })();
+  </script>
+</body>
+</html>
