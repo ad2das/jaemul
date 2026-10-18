@@ -919,9 +919,11 @@
 
         const existingIndex = scanRecords.findIndex(r => r.code === code);
         let activeRecord = null;
+        let undo = null;
 
         if (existingIndex !== -1) {
           if (settings.dupMode === 'increment') {
+            undo = makeIncrementUndo(scanRecords[existingIndex], existingIndex);
             scanRecords[existingIndex].quantity = (scanRecords[existingIndex].quantity || 1) + 1;
             scanRecords[existingIndex].updatedAt = new Date().toISOString();
             
@@ -946,6 +948,7 @@
           } else {
             // 'always' -> create brand new row
             activeRecord = addNewRecord(code, '', '', formatName, 1, info);
+            undo = makeAddUndo(activeRecord);
             playBeepSound('success');
             triggerVibration([90]);
             triggerVisualFlash();
@@ -954,6 +957,7 @@
         } else {
           // Brand new
           activeRecord = addNewRecord(code, '', '', formatName, 1, info);
+          undo = makeAddUndo(activeRecord);
           playBeepSound('success');
           triggerVibration([90]);
           triggerVisualFlash();
@@ -966,8 +970,36 @@
         updateLiveItemCard(activeRecord);
 
         if (settings.autoOpenDetail !== false && activeRecord) {
-          openQtyModal(activeRecord);
+          openQtyModal(activeRecord, undo);
         }
+      }
+
+      // Undo actions for the quantity popup's 취소: a scan / manual add is only kept once 확인 is pressed
+      function makeAddUndo(record) {
+        return () => {
+          scanRecords = scanRecords.filter(r => r.id !== record.id);
+          if (currentActiveRecord && currentActiveRecord.id === record.id) {
+            currentActiveRecord = scanRecords.length > 0 ? scanRecords[0] : null;
+            updateLiveItemCard(currentActiveRecord);
+          }
+          showToast(`등록 취소: ${record.code}`, 'info');
+        };
+      }
+
+      function makeIncrementUndo(record, prevIndex) {
+        const prevQty = record.quantity;
+        const prevUpdatedAt = record.updatedAt;
+        return () => {
+          record.quantity = prevQty;
+          record.updatedAt = prevUpdatedAt;
+          const i = scanRecords.indexOf(record);
+          if (i !== -1) {
+            scanRecords.splice(i, 1);
+            scanRecords.splice(Math.min(prevIndex, scanRecords.length), 0, record);
+          }
+          updateLiveItemCard(record);
+          showToast(`수량 증가 취소: ${record.code} (총 ${prevQty || 1}개)`, 'info');
+        };
       }
 
       function generateSecureRandomString(len = 6) {
@@ -1158,7 +1190,10 @@
         qtySummary.textContent = `활용 ${active} · 비활용 ${c.unused} · 실사수량 ${active + c.unused}`;
       }
 
-      function openQtyModal(record) {
+      let qtyUndo = null;
+      const btnQtyClose = document.getElementById('btnQtyClose');
+
+      function openQtyModal(record, undo = null) {
         // Freeze scanning while the popup is open; resumed in closeQtyModal
         if (isScanning && html5QrCode && !scannerPausedForDetail) {
           try {
@@ -1176,12 +1211,15 @@
         qtyCategoryBadge.className = `px-2 py-0.5 rounded text-[11px] font-semibold shrink-0 ${info.badgeClass}`;
         QTY_CATS.forEach(k => { qtyCatInputs[k].value = c[k]; });
         updateQtySummary();
+        qtyUndo = undo;
+        btnQtyClose.textContent = undo ? '취소' : '닫기';
         qtyModal.classList.remove('hidden');
       }
 
       function closeQtyModal() {
         qtyModal.classList.add('hidden');
         qtyRecordId = null;
+        qtyUndo = null;
         if (scannerPausedForDetail) {
           scannerPausedForDetail = false;
           if (isScanning && html5QrCode) {
@@ -1205,7 +1243,16 @@
         });
       });
       Object.values(qtyCatInputs).forEach(input => input.addEventListener('input', updateQtySummary));
-      document.getElementById('btnQtyClose').addEventListener('click', closeQtyModal);
+      btnQtyClose.addEventListener('click', () => {
+        const undo = qtyUndo;
+        closeQtyModal();
+        if (undo) {
+          undo();
+          saveData();
+          renderTable();
+          updateStats();
+        }
+      });
 
       qtyForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -2031,7 +2078,9 @@
           let item = null;
 
           // Same duplicate rules as a camera scan; the quantity split is entered in the popup below
+          let undo = null;
           if (existing && settings.dupMode === 'increment') {
+            undo = makeIncrementUndo(existing, scanRecords.indexOf(existing));
             existing.quantity = (existing.quantity || 1) + 1;
             existing.updatedAt = new Date().toISOString();
             item = existing;
@@ -2041,6 +2090,7 @@
             showToast(`이미 등록된 번호입니다: ${info.code}`, 'warning');
           } else {
             item = addNewRecord(info.code, '', '', format, 1, info);
+            undo = makeAddUndo(item);
             showToast(`바코드 추가 완료: ${info.code}`, 'success');
           }
 
@@ -2049,7 +2099,7 @@
           updateStats();
           updateLiveItemCard(item);
           closeManualModal();
-          openQtyModal(item);
+          openQtyModal(item, undo);
         });
 
         // Visibility & cleanup
