@@ -151,6 +151,7 @@
               <span class="absolute bottom-2 left-2 w-5 h-5 border-b-2 border-l-2 border-cyan-400"></span>
               <span class="absolute bottom-2 right-2 w-5 h-5 border-b-2 border-r-2 border-cyan-400"></span>
             </div>
+            <div id="zoomControls" class="hidden absolute top-2 left-2 pointer-events-auto flex gap-1"></div>
             <button id="btnTorch" type="button" class="hidden absolute top-2 right-2 pointer-events-auto inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-slate-900/85 border border-slate-700/80 text-xs font-semibold text-slate-200 backdrop-blur shadow-md active:scale-95 transition">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
               <span id="btnTorchLabel">플래시</span>
@@ -641,6 +642,7 @@
       const btnStartCamera = document.getElementById('btnStartCamera');
       const btnStopCamera = document.getElementById('btnStopCamera');
       const btnTorch = document.getElementById('btnTorch');
+      const zoomControls = document.getElementById('zoomControls');
       const btnTorchLabel = document.getElementById('btnTorchLabel');
 
       // Export Buttons
@@ -1506,6 +1508,62 @@
         return zxingWasmReady;
       }
 
+      // Camera zoom (track 'zoom' constraint; Android Chrome, recent iOS Safari). Last choice is remembered.
+      function fmtZoom(z) {
+        return `${Math.round(z * 10) / 10}x`;
+      }
+
+      function highlightZoom(z) {
+        zoomControls.querySelectorAll('button').forEach(btn => {
+          const on = Math.abs(parseFloat(btn.dataset.zoom) - z) < 0.05;
+          btn.classList.toggle('bg-cyan-500', on);
+          btn.classList.toggle('text-slate-950', on);
+          btn.classList.toggle('bg-slate-900/85', !on);
+          btn.classList.toggle('text-slate-200', !on);
+        });
+      }
+
+      function resetZoomControls() {
+        zoomControls.innerHTML = '';
+        zoomControls.classList.add('hidden');
+      }
+
+      function setupZoomControls(caps, current) {
+        resetZoomControls();
+        if (!caps || !caps.zoom || !(caps.zoom.max > caps.zoom.min)) return;
+        const { min, max } = caps.zoom;
+        const levels = [1, 2, 3, 5]
+          .map(z => Math.min(max, Math.max(min, z)))
+          .filter((z, i, arr) => arr.findIndex(v => Math.abs(v - z) < 0.05) === i);
+        if (levels.length < 2) return;
+        levels.forEach(z => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.dataset.zoom = String(z);
+          btn.textContent = fmtZoom(z);
+          btn.className = 'min-w-[2.5rem] px-2 py-1.5 rounded-full border border-slate-700/80 text-xs font-bold backdrop-blur shadow-md active:scale-95 transition';
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            applyZoom(z);
+          });
+          zoomControls.appendChild(btn);
+        });
+        highlightZoom(current);
+        zoomControls.classList.remove('hidden');
+      }
+
+      async function applyZoom(z) {
+        if (!isScanning || !html5QrCode) return;
+        try {
+          await html5QrCode.applyVideoConstraints({ advanced: [{ zoom: z }] });
+          settings.zoom = z;
+          saveSettings();
+          highlightZoom(z);
+        } catch (_) {
+          showToast('이 기기에서는 배율을 바꿀 수 없습니다.', 'warning');
+        }
+      }
+
       let torchOn = false;
       function resetTorchButton() {
         torchOn = false;
@@ -1669,12 +1727,20 @@
             const caps = html5QrCode.getRunningTrackCapabilities();
             if (caps && caps.torch) btnTorch.classList.remove('hidden');
             const advanced = {};
-            // Pro iPhones can't focus close with the main lens: zoom in so the user can hold the phone farther away
-            if (isIOS && caps && caps.zoom && caps.zoom.max >= 2) advanced.zoom = Math.max(2, caps.zoom.min || 1);
+            if (caps && caps.zoom && caps.zoom.max > caps.zoom.min) {
+              // Last chosen zoom; otherwise 2x on iOS since Pro iPhones can't focus close with the main lens
+              const wanted = settings.zoom || (isIOS ? 2 : 0);
+              if (wanted) advanced.zoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min, wanted));
+            }
             if (caps && Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) advanced.focusMode = 'continuous';
             if (Object.keys(advanced).length) {
               html5QrCode.applyVideoConstraints({ advanced: [advanced] }).catch(() => {});
             }
+            let currentZoom = advanced.zoom;
+            if (!currentZoom) {
+              try { currentZoom = html5QrCode.getRunningTrackSettings().zoom; } catch (_) { /* no settings */ }
+            }
+            setupZoomControls(caps, currentZoom || (caps && caps.zoom ? caps.zoom.min : 1));
           } catch (_) {
             // capabilities (torch/zoom/focus) not available on this device
           }
@@ -1717,6 +1783,7 @@
 
           isScanning = false;
           html5QrCode = null;
+          resetZoomControls();
           resetTorchButton();
           updateCameraStatus(false, '스캔 중지됨');
           btnStartCamera.disabled = false;
