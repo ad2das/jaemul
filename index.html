@@ -45,6 +45,7 @@
   <!-- html5-qrcode Barcode & QR Scanner Library -->
   <script src="vendor/html5-qrcode.min.js"></script>
   <script src="vendor/barcode-detector.js"></script>
+  <script src="vendor/cp949.js"></script>
   <style>
     /* Custom animation for 1D linear barcode scanning laser */
     @keyframes scanline {
@@ -366,7 +367,7 @@
         <div class="flex items-center justify-between gap-2">
           <!-- Search & Filter Bar -->
           <div class="relative flex-1">
-            <input type="text" id="searchInput" placeholder="바코드 번호로 실시간 검색..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-cyan-500">
+            <input type="text" id="searchInput" placeholder="바코드 번호·비고 검색..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-cyan-500">
             <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           </div>
 
@@ -549,6 +550,11 @@
           <button type="button" data-cat="unused" data-step="1" class="qty-step w-10 h-10 shrink-0 rounded-xl bg-slate-800 text-white text-xl font-bold active:bg-slate-700">+</button>
         </div>
       </div>
+
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] font-semibold text-slate-400">비고</span>
+        <input type="text" id="qtyMemo" maxlength="100" autocomplete="off" placeholder="예: 파손, 위치 이동" class="w-full h-10 bg-slate-950 border border-slate-800 rounded-xl px-3 text-base text-white placeholder-slate-600 outline-none focus:border-cyan-500">
+      </label>
 
       <div id="qtySummary" class="text-xs text-slate-300 bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2 text-center"></div>
 
@@ -1176,6 +1182,7 @@
       const qtyCodeVal = document.getElementById('qtyCodeVal');
       const qtyCategoryBadge = document.getElementById('qtyCategoryBadge');
       const qtySummary = document.getElementById('qtySummary');
+      const qtyMemo = document.getElementById('qtyMemo');
       const qtyCatInputs = {};
       qtyModal.querySelectorAll('.qty-cat').forEach(el => { qtyCatInputs[el.dataset.cat] = el; });
       let qtyRecordId = null;
@@ -1212,6 +1219,7 @@
         qtyCategoryBadge.textContent = info.categoryName;
         qtyCategoryBadge.className = `px-2 py-0.5 rounded text-[11px] font-semibold shrink-0 ${info.badgeClass}`;
         QTY_CATS.forEach(k => { qtyCatInputs[k].value = c[k]; });
+        qtyMemo.value = record.memo || '';
         updateQtySummary();
         qtyUndo = undo;
         btnQtyClose.textContent = undo ? '취소' : '닫기';
@@ -1268,6 +1276,7 @@
         if (target) {
           target.counts = c;
           target.quantity = total;
+          target.memo = qtyMemo.value.trim().slice(0, 100);
           target.updatedAt = new Date().toISOString();
           saveData();
           renderTable();
@@ -1355,6 +1364,12 @@
           subNote.className = 'text-[10px] text-slate-400 mt-0.5';
           subNote.textContent = `${item.format || 'Code 128'} · ${info.specValid ? '정상 규격' : '규격 확인'}`;
           tdCode.appendChild(subNote);
+          if (item.memo) {
+            const memoNote = document.createElement('div');
+            memoNote.className = 'text-[11px] text-amber-200/90 mt-0.5 break-all';
+            memoNote.textContent = `비고: ${item.memo}`;
+            tdCode.appendChild(memoNote);
+          }
 
           tr.appendChild(tdCode);
 
@@ -1804,14 +1819,24 @@
       // 9. CSV Export & Share Logic (Saved directly to Downloads folder)
       // -------------------------------------------------------------
       // ZFIAL0170 업로드 양식: CP949, BOM 없음, CRLF, 자산번호별 1행
-      const CSV_HEADERS = ['자산번호', '활용자산', '비활용자산', '실사수량', '신품', '중고품', '요정품', '비활용'];
-      // CP949 bytes of the header line above (browsers can't encode CP949 natively; data rows are ASCII)
+      const CSV_HEADERS = ['자산번호', '활용자산', '비활용자산', '실사수량', '신품', '중고품', '요정품', '비활용', '비고'];
+      // CP949 bytes of the header line above, kept byte-exact with the ZFIAL0170 sample (+ ',비고')
       const CSV_HEADER_CP949 = new Uint8Array([
         0xc0, 0xda, 0xbb, 0xea, 0xb9, 0xf8, 0xc8, 0xa3, 0x2c, 0xc8, 0xb0, 0xbf, 0xeb, 0xc0, 0xda, 0xbb,
         0xea, 0x2c, 0xba, 0xf1, 0xc8, 0xb0, 0xbf, 0xeb, 0xc0, 0xda, 0xbb, 0xea, 0x2c, 0xbd, 0xc7, 0xbb,
         0xe7, 0xbc, 0xf6, 0xb7, 0xae, 0x2c, 0xbd, 0xc5, 0xc7, 0xb0, 0x2c, 0xc1, 0xdf, 0xb0, 0xed, 0xc7,
-        0xb0, 0x2c, 0xbf, 0xe4, 0xc1, 0xa4, 0xc7, 0xb0, 0x2c, 0xba, 0xf1, 0xc8, 0xb0, 0xbf, 0xeb
+        0xb0, 0x2c, 0xbf, 0xe4, 0xc1, 0xa4, 0xc7, 0xb0, 0x2c, 0xba, 0xf1, 0xc8, 0xb0, 0xbf, 0xeb,
+        0x2c, 0xba, 0xf1, 0xb0, 0xed
       ]);
+
+      // 비고 goes into a plain comma-separated file with no quoting: keep it on one line and in one column
+      function csvMemo(memo) {
+        return String(memo || '')
+          .replace(/[\r\n\t]+/g, ' ')
+          .replace(/,/g, '，')
+          .replace(/"/g, '＂')
+          .trim();
+      }
 
       function getCsvFileName() {
         const now = new Date();
@@ -1827,20 +1852,27 @@
           if (!code) return;
           const c = getCounts(item);
           const active = c.new + c.used + c.repair;
-          // 자산번호, 활용자산, 비활용자산, 실사수량, 신품, 중고품, 요정품, 비활용
-          csvRows.push([code, active, c.unused, active + c.unused, c.new, c.used, c.repair, c.unused].join(','));
+          // 자산번호, 활용자산, 비활용자산, 실사수량, 신품, 중고품, 요정품, 비활용, 비고
+          csvRows.push([code, active, c.unused, active + c.unused, c.new, c.used, c.repair, c.unused, csvMemo(item.memo)].join(','));
         });
         return csvRows.join('\r\n') + '\r\n';
       }
 
       function encodeCsvCp949(csvText) {
         const body = csvText.slice(csvText.indexOf('\r\n'));
-        const bytes = new Uint8Array(CSV_HEADER_CP949.length + body.length);
-        bytes.set(CSV_HEADER_CP949, 0);
-        for (let i = 0; i < body.length; i++) {
-          const c = body.charCodeAt(i);
-          bytes[CSV_HEADER_CP949.length + i] = c < 0x80 ? c : 0x3f; // '?' for anything non-ASCII
+        let bodyBytes;
+        if (typeof window.encodeCp949 === 'function') {
+          bodyBytes = window.encodeCp949(body);
+        } else {
+          bodyBytes = new Uint8Array(body.length);
+          for (let i = 0; i < body.length; i++) {
+            const c = body.charCodeAt(i);
+            bodyBytes[i] = c < 0x80 ? c : 0x3f; // '?' for anything non-ASCII
+          }
         }
+        const bytes = new Uint8Array(CSV_HEADER_CP949.length + bodyBytes.length);
+        bytes.set(CSV_HEADER_CP949, 0);
+        bytes.set(bodyBytes, CSV_HEADER_CP949.length);
         return bytes;
       }
 
